@@ -78,24 +78,30 @@ export function useAuth() {
     setIsLoadingProfile(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (actor as any)
-      .getMyProfile()
-      .then((result: [{ name: string; email: string }] | []) => {
-        const profile = result[0];
-        if (profile) {
-          setUser({ name: profile.name, email: profile.email });
-          profileLoadedRef.current = true;
-        } else {
-          const defaultName = "User";
-          const defaultEmail = "";
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return (actor as any)
-            .createOrUpdateProfile(defaultName, defaultEmail)
-            .then(() => {
+      .getCallerUserProfile()
+      .then(
+        (
+          profile: { name: string; email: string; createdAt: bigint } | null,
+        ) => {
+          if (profile) {
+            setUser({ name: profile.name, email: profile.email });
+            profileLoadedRef.current = true;
+          } else {
+            const defaultName = "User";
+            const defaultEmail = "";
+            const newProfile = {
+              name: defaultName,
+              email: defaultEmail,
+              createdAt: BigInt(Date.now()) * 1_000_000n,
+            };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return (actor as any).saveCallerUserProfile(newProfile).then(() => {
               setUser({ name: defaultName, email: defaultEmail });
               profileLoadedRef.current = true;
             });
-        }
-      })
+          }
+        },
+      )
       .catch(() => {
         setUser(null);
         // On error reset so user can try again

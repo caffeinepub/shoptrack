@@ -10,16 +10,17 @@ import Runtime "mo:core/Runtime";
 import AccessControl "./authorization/access-control";
 import MixinAuthorization "./authorization/MixinAuthorization";
 import MixinStorage "./blob-storage/Mixin";
+import Migration "migration";
 
+(with migration = Migration.run)
 persistent actor ShopTrack {
-
   let accessControlState : AccessControl.AccessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
   include MixinStorage();
 
   // ─── TYPES ────────────────────────────────────────────────────────────────
 
-  type UserProfile = {
+  public type UserProfile = {
     name : Text;
     email : Text;
     createdAt : Int;
@@ -135,16 +136,16 @@ persistent actor ShopTrack {
 
   func generateId() : Text {
     nextId += 1;
-    Time.now().toText() # "-" # nextId.toText()
+    Time.now().toText() # "-" # nextId.toText();
   };
 
   func getUserProducts(ownerText : Text) : [Product] {
     switch (userProductIds.get(ownerText)) {
       case (null) { [] };
       case (?ids) {
-        ids.filterMap(func(id : Text) : ?Product { products.get(id) })
+        ids.filterMap(func(id : Text) : ?Product { products.get(id) });
       };
-    }
+    };
   };
 
   func addProductIdForUser(ownerText : Text, id : Text) {
@@ -162,13 +163,13 @@ persistent actor ShopTrack {
         let filtered = ids.filter(func(x : Text) : Bool { x != id });
         userProductIds.add(ownerText, filtered);
       };
-    }
+    };
   };
 
   func textContains(haystack : Text, needle : Text) : Bool {
     if (needle == "") { return true };
     let lowerNeedle = needle.toLower();
-    haystack.toLower().contains(#text lowerNeedle)
+    haystack.toLower().contains(#text lowerNeedle);
   };
 
   func monthFromNs(ns : Int) : Text {
@@ -178,29 +179,38 @@ persistent actor ShopTrack {
     let dayOfYear = days - (year - 1970) * 365;
     let month = dayOfYear / 30 + 1;
     let m = if (month < 1) { 1 } else if (month > 12) { 12 } else { month };
-    year.toText() # "-" # (if (m < 10) { "0" # m.toText() } else { m.toText() })
+    year.toText() # "-" # (if (m < 10) { "0" # m.toText() } else { m.toText() });
   };
 
   // ─── USER PROFILE ─────────────────────────────────────────────────────────
 
-  public shared ({ caller }) func createOrUpdateProfile(name : Text, email : Text) : async () {
-    if (caller.isAnonymous()) { Runtime.trap("Anonymous not allowed") };
-    let existing = userProfiles.get(caller);
-    let createdAt = switch (existing) {
-      case (?p) { p.createdAt };
-      case (null) { Time.now() };
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view profiles");
     };
-    userProfiles.add(caller, { name; email; createdAt });
+    userProfiles.get(caller);
   };
 
-  public query ({ caller }) func getMyProfile() : async ?UserProfile {
-    userProfiles.get(caller)
+  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own profile");
+    };
+    userProfiles.get(user);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
+    userProfiles.add(caller, profile);
   };
 
   // ─── PRODUCT CRUD ─────────────────────────────────────────────────────────
 
   public shared ({ caller }) func addProduct(input : ProductInput) : async Text {
-    if (caller.isAnonymous()) { Runtime.trap("Anonymous not allowed") };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can add products");
+    };
     let id = generateId();
     let ownerText = caller.toText();
     let now = Time.now();
@@ -233,16 +243,20 @@ persistent actor ShopTrack {
     };
     products.add(id, product);
     addProductIdForUser(ownerText, id);
-    id
+    id;
   };
 
   public shared ({ caller }) func updateProduct(id : Text, input : ProductInput) : async Bool {
-    if (caller.isAnonymous()) { Runtime.trap("Anonymous not allowed") };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update products");
+    };
     let ownerText = caller.toText();
     switch (products.get(id)) {
       case (null) { false };
       case (?existing) {
-        if (existing.ownerId != ownerText) { Runtime.trap("Unauthorized") };
+        if (existing.ownerId != ownerText) { 
+          Runtime.trap("Unauthorized: Can only update your own products");
+        };
         let updated : Product = {
           id;
           ownerId = ownerText;
@@ -271,27 +285,33 @@ persistent actor ShopTrack {
           updatedAt = Time.now();
         };
         products.add(id, updated);
-        true
+        true;
       };
-    }
+    };
   };
 
   public shared ({ caller }) func deleteProduct(id : Text) : async Bool {
-    if (caller.isAnonymous()) { Runtime.trap("Anonymous not allowed") };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete products");
+    };
     let ownerText = caller.toText();
     switch (products.get(id)) {
       case (null) { false };
       case (?existing) {
-        if (existing.ownerId != ownerText) { Runtime.trap("Unauthorized") };
+        if (existing.ownerId != ownerText) { 
+          Runtime.trap("Unauthorized: Can only delete your own products");
+        };
         products.remove(id);
         removeProductIdForUser(ownerText, id);
-        true
+        true;
       };
-    }
+    };
   };
 
   public shared ({ caller }) func deleteProducts(ids : [Text]) : async Nat {
-    if (caller.isAnonymous()) { Runtime.trap("Anonymous not allowed") };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete products");
+    };
     let ownerText = caller.toText();
     var count = 0;
     for (id in ids.vals()) {
@@ -306,48 +326,42 @@ persistent actor ShopTrack {
         };
       };
     };
-    count
+    count;
   };
 
   public query ({ caller }) func getProduct(id : Text) : async ?Product {
-    if (caller.isAnonymous()) { return null };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view products");
+    };
     let ownerText = caller.toText();
     switch (products.get(id)) {
       case (null) { null };
       case (?p) {
-        if (p.ownerId == ownerText) { ?p } else { null }
+        if (p.ownerId == ownerText) { ?p } else { null };
       };
-    }
+    };
   };
 
   public query ({ caller }) func getProducts(filter : ProductFilter) : async ProductPage {
-    if (caller.isAnonymous()) {
-      return { items = []; total = 0; page = 1; pageSize = filter.pageSize };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view products");
     };
     let ownerText = caller.toText();
     let allProducts = getUserProducts(ownerText);
 
     let filtered = allProducts.filter(func(p : Product) : Bool {
-      let searchMatch = filter.search == "" or
-        textContains(p.productName, filter.search) or
-        textContains(p.orderId, filter.search) or
-        textContains(p.platformName, filter.search);
+      let searchMatch = filter.search == "" or textContains(p.productName, filter.search) or textContains(p.orderId, filter.search) or textContains(p.platformName, filter.search);
       let statusMatch = filter.statusFilter == "" or p.status == filter.statusFilter;
-      let categoryMatch = filter.categoryFilter == "" or
-        textContains(p.category, filter.categoryFilter);
-      let priceMatch = (filter.minPrice <= 0.0 or p.finalAmount >= filter.minPrice) and
-        (filter.maxPrice <= 0.0 or p.finalAmount <= filter.maxPrice);
-      let dateMatch = (filter.fromDate <= 0 or p.purchaseDate >= filter.fromDate) and
-        (filter.toDate <= 0 or p.purchaseDate <= filter.toDate);
-      searchMatch and statusMatch and categoryMatch and priceMatch and dateMatch
+      let categoryMatch = filter.categoryFilter == "" or textContains(p.category, filter.categoryFilter);
+      let priceMatch = (filter.minPrice <= 0.0 or p.finalAmount >= filter.minPrice) and (filter.maxPrice <= 0.0 or p.finalAmount <= filter.maxPrice);
+      let dateMatch = (filter.fromDate <= 0 or p.purchaseDate >= filter.fromDate) and (filter.toDate <= 0 or p.purchaseDate <= filter.toDate);
+      searchMatch and statusMatch and categoryMatch and priceMatch and dateMatch;
     });
 
-    let sorted = filtered.sort(func(a : Product, b : Product) : {#less; #equal; #greater} {
+    let sorted = filtered.sort(func(a : Product, b : Product) : { #less; #equal; #greater } {
       let cmp = switch (filter.sortBy) {
         case ("price") {
-          if (a.finalAmount < b.finalAmount) { #less }
-          else if (a.finalAmount > b.finalAmount) { #greater }
-          else { #equal }
+          if (a.finalAmount < b.finalAmount) { #less } else if (a.finalAmount > b.finalAmount) { #greater } else { #equal };
         };
         case ("category") { Text.compare(a.category, b.category) };
         case (_) { Int.compare(a.purchaseDate, b.purchaseDate) };
@@ -357,8 +371,8 @@ persistent actor ShopTrack {
           case (#less) { #greater };
           case (#greater) { #less };
           case (#equal) { #equal };
-        }
-      } else { cmp }
+        };
+      } else { cmp };
     });
 
     let total = sorted.size();
@@ -366,18 +380,15 @@ persistent actor ShopTrack {
     let pg = if (filter.page == 0) { 1 } else { filter.page };
     let start = if (pg > 0) { (pg - 1) * ps } else { 0 };
     let end_ = Nat.min(start + ps, total);
-    let items = if (start >= total) { [] } else {
-      sorted.sliceToArray(start, end_)
-    };
-    { items; total; page = pg; pageSize = ps }
+    let items = if (start >= total) { [] } else { sorted.sliceToArray(start, end_) };
+    { items; total; page = pg; pageSize = ps };
   };
 
   // ─── ANALYTICS ────────────────────────────────────────────────────────────
 
   public query ({ caller }) func getDashboardStats() : async DashboardStats {
-    if (caller.isAnonymous()) {
-      return { totalOrders = 0; totalSpent = 0.0; receivedCount = 0;
-               cancelledCount = 0; replacedCount = 0; pendingCount = 0; recentOrders = [] };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view dashboard stats");
     };
     let ownerText = caller.toText();
     let allProducts = getUserProducts(ownerText);
@@ -400,18 +411,27 @@ persistent actor ShopTrack {
       };
     };
 
-    let sortedByDate = allProducts.sort(func(a : Product, b : Product) : {#less; #equal; #greater} {
-      Int.compare(b.createdAt, a.createdAt)
+    let sortedByDate = allProducts.sort(func(a : Product, b : Product) : { #less; #equal; #greater } {
+      Int.compare(b.createdAt, a.createdAt);
     });
     let recentCount = Nat.min(5, sortedByDate.size());
     let recentOrders = sortedByDate.sliceToArray(0, recentCount);
 
-    { totalOrders = allProducts.size(); totalSpent; receivedCount;
-      cancelledCount; replacedCount; pendingCount; recentOrders }
+    {
+      totalOrders = allProducts.size();
+      totalSpent;
+      receivedCount;
+      cancelledCount;
+      replacedCount;
+      pendingCount;
+      recentOrders;
+    };
   };
 
   public query ({ caller }) func getMonthlySpend() : async [MonthlySpend] {
-    if (caller.isAnonymous()) { return [] };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view monthly spend");
+    };
     let ownerText = caller.toText();
     let allProducts = getUserProducts(ownerText);
     let monthMap : Map.Map<Text, (Float, Nat)> = Map.empty<Text, (Float, Nat)>();
@@ -425,13 +445,15 @@ persistent actor ShopTrack {
     };
     Array.fromIter(monthMap.entries()).map(
       func((month, (totalSpent, orderCount)) : (Text, (Float, Nat))) : MonthlySpend {
-        { month; totalSpent; orderCount }
+        { month; totalSpent; orderCount };
       }
-    )
+    );
   };
 
   public query ({ caller }) func getCategoryBreakdown() : async [CategoryBreakdown] {
-    if (caller.isAnonymous()) { return [] };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view category breakdown");
+    };
     let ownerText = caller.toText();
     let allProducts = getUserProducts(ownerText);
     let catMap : Map.Map<Text, (Float, Nat)> = Map.empty<Text, (Float, Nat)>();
@@ -445,13 +467,15 @@ persistent actor ShopTrack {
     };
     Array.fromIter(catMap.entries()).map(
       func((category, (totalSpent, count)) : (Text, (Float, Nat))) : CategoryBreakdown {
-        { category; totalSpent; count }
+        { category; totalSpent; count };
       }
-    )
+    );
   };
 
   public query ({ caller }) func getStatusDistribution() : async [StatusDistribution] {
-    if (caller.isAnonymous()) { return [] };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view status distribution");
+    };
     let ownerText = caller.toText();
     let allProducts = getUserProducts(ownerText);
     let statusMap : Map.Map<Text, Nat> = Map.empty<Text, Nat>();
@@ -464,8 +488,8 @@ persistent actor ShopTrack {
     };
     Array.fromIter(statusMap.entries()).map(
       func((status, count) : (Text, Nat)) : StatusDistribution {
-        { status; count }
+        { status; count };
       }
-    )
+    );
   };
-}
+};
