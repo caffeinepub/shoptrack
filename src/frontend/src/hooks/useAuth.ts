@@ -22,11 +22,14 @@ export function useAuth() {
   // Consider initializing if:
   // 1. II is still initializing, OR
   // 2. We have a valid identity but the actor is still being fetched (post-login gap), OR
-  // 3. Login just succeeded and we're setting up
+  // 3. Login just succeeded (success state) but user profile hasn't loaded yet, OR
+  // 4. We have a valid identity but actor/profile are not ready yet
   const isFullyInitializing =
     isInitializing ||
     loginStatus === "logging-in" ||
+    (loginStatus === "success" && !user) ||
     (hasAuthenticatedIdentity && isFetching) ||
+    (hasAuthenticatedIdentity && isLoadingProfile) ||
     (hasAuthenticatedIdentity &&
       !actor &&
       !isFetching &&
