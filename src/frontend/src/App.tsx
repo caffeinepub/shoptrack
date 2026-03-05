@@ -1,9 +1,8 @@
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { useOrders } from "./hooks/useOrders";
-import { seedSampleData } from "./lib/storage";
 import type { AppPage } from "./lib/types";
 
 import { AppLayout } from "./components/AppLayout";
@@ -17,23 +16,41 @@ import { OrdersPage } from "./pages/OrdersPage";
 
 export default function App() {
   const auth = useAuth();
-  const { orders, createOrder, editOrder, removeOrder, removeOrders, getById } =
-    useOrders();
+  const {
+    orders,
+    createOrder,
+    editOrder,
+    removeOrder,
+    removeOrders,
+    getById,
+    isLoading,
+  } = useOrders();
   const [page, setPage] = useState<AppPage>("dashboard");
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
-
-  // Seed sample data on first login
-  useEffect(() => {
-    if (auth.user) {
-      seedSampleData();
-    }
-  }, [auth.user]);
 
   const navigate = (nextPage: AppPage, id?: string) => {
     setPage(nextPage);
     setActiveId(id);
     window.scrollTo(0, 0);
   };
+
+  // Show initializing spinner
+  if (auth.isInitializing) {
+    return (
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="light"
+        enableSystem={false}
+      >
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <div className="h-8 w-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+            <p className="text-sm">Loading ShopTrack...</p>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
 
   if (!auth.user) {
     return (
@@ -66,16 +83,14 @@ export default function App() {
             onNavigate={navigate}
             onDelete={removeOrder}
             onDeleteMany={removeOrders}
+            isLoading={isLoading}
           />
         );
 
       case "orders-new":
         return (
           <OrderFormPage
-            onSave={(data) => {
-              const saved = createOrder(data);
-              return saved;
-            }}
+            onSave={createOrder}
             onUpdate={editOrder}
             onNavigate={navigate}
           />
@@ -91,10 +106,7 @@ export default function App() {
           <OrderFormPage
             orderId={order.id}
             existingOrder={order}
-            onSave={(data) => {
-              const saved = createOrder(data);
-              return saved;
-            }}
+            onSave={createOrder}
             onUpdate={editOrder}
             onNavigate={navigate}
           />

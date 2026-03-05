@@ -53,8 +53,9 @@ const PAGE_SIZE = 10;
 interface OrdersPageProps {
   orders: Order[];
   onNavigate: (page: AppPage, id?: string) => void;
-  onDelete: (id: string) => void;
-  onDeleteMany: (ids: string[]) => void;
+  onDelete: (id: string) => Promise<void>;
+  onDeleteMany: (ids: string[]) => Promise<void>;
+  isLoading?: boolean;
 }
 
 function formatCurrency(amount: number, currency: string): string {
@@ -82,6 +83,7 @@ export function OrdersPage({
   onNavigate,
   onDelete,
   onDeleteMany,
+  isLoading = false,
 }: OrdersPageProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -196,25 +198,34 @@ export function OrdersPage({
     setSelected(next);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteId) {
-      onDelete(deleteId);
-      toast.success("Order deleted");
+      const idToDelete = deleteId;
       setDeleteId(null);
-      setSelected((prev) => {
-        const next = new Set(prev);
-        next.delete(deleteId);
-        return next;
-      });
+      try {
+        await onDelete(idToDelete);
+        toast.success("Order deleted");
+        setSelected((prev) => {
+          const next = new Set(prev);
+          next.delete(idToDelete);
+          return next;
+        });
+      } catch {
+        toast.error("Failed to delete order. Please try again.");
+      }
     }
   };
 
-  const confirmBulkDelete = () => {
+  const confirmBulkDelete = async () => {
     const ids = Array.from(selected);
-    onDeleteMany(ids);
-    toast.success(`${ids.length} orders deleted`);
-    setSelected(new Set());
     setDeleteBulk(false);
+    try {
+      await onDeleteMany(ids);
+      toast.success(`${ids.length} orders deleted`);
+      setSelected(new Set());
+    } catch {
+      toast.error("Failed to delete orders. Please try again.");
+    }
   };
 
   return (
@@ -416,7 +427,15 @@ export function OrdersPage({
       <Card className="shadow-card">
         <CardHeader className="pb-0 pt-0" />
         <CardContent className="p-0">
-          {pageOrders.length === 0 ? (
+          {isLoading ? (
+            <div
+              data-ocid="orders.loading_state"
+              className="flex flex-col items-center justify-center py-16 text-muted-foreground"
+            >
+              <div className="h-8 w-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin mb-3" />
+              <p className="text-sm">Loading orders...</p>
+            </div>
+          ) : pageOrders.length === 0 ? (
             <div
               data-ocid="orders.empty_state"
               className="flex flex-col items-center justify-center py-16 text-muted-foreground"

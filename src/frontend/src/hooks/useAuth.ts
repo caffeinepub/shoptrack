@@ -1,61 +1,67 @@
-import { useCallback, useState } from "react";
-import { getUser, removeUser, saveUser } from "../lib/storage";
+import { useCallback, useEffect, useState } from "react";
 import type { User } from "../lib/types";
+import { useActor } from "./useActor";
+import { useInternetIdentity } from "./useInternetIdentity";
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(() => getUser());
+  const {
+    identity,
+    login: iiLogin,
+    clear: iiClear,
+    isInitializing,
+  } = useInternetIdentity();
+  const { actor, isFetching } = useActor();
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  const login = useCallback(
-    (
-      email: string,
-      _password: string,
-      name?: string,
-    ): { success: boolean; error?: string } => {
-      if (!email || !_password)
-        return { success: false, error: "Email and password are required." };
-      if (_password.length < 6)
-        return {
-          success: false,
-          error: "Password must be at least 6 characters.",
-        };
+  // Load profile from backend when actor + identity are ready
+  useEffect(() => {
+    if (
+      !actor ||
+      isFetching ||
+      !identity ||
+      identity.getPrincipal().isAnonymous()
+    ) {
+      if (
+        !isInitializing &&
+        (!identity || identity.getPrincipal().isAnonymous())
+      ) {
+        setUser(null);
+      }
+      return;
+    }
 
-      const userName = name ?? email.split("@")[0];
-      const newUser: User = { name: userName, email };
-      saveUser(newUser);
-      setUser(newUser);
-      return { success: true };
-    },
-    [],
-  );
+    setIsLoadingProfile(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (actor as any)
+      .getMyProfile()
+      .then((result: [{ name: string; email: string }] | []) => {
+        const profile = result[0];
+        if (profile) {
+          setUser({ name: profile.name, email: profile.email });
+        } else {
+          const defaultName = "User";
+          const defaultEmail = "";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return (actor as any)
+            .createOrUpdateProfile(defaultName, defaultEmail)
+            .then(() => {
+              setUser({ name: defaultName, email: defaultEmail });
+            });
+        }
+      })
+      .catch(() => setUser(null))
+      .finally(() => setIsLoadingProfile(false));
+  }, [actor, isFetching, identity, isInitializing]);
 
-  const register = useCallback(
-    (
-      name: string,
-      email: string,
-      password: string,
-    ): { success: boolean; error?: string } => {
-      if (!name || !email || !password)
-        return { success: false, error: "All fields are required." };
-      if (password.length < 6)
-        return {
-          success: false,
-          error: "Password must be at least 6 characters.",
-        };
-      if (!email.includes("@"))
-        return { success: false, error: "Invalid email address." };
-
-      const newUser: User = { name, email };
-      saveUser(newUser);
-      setUser(newUser);
-      return { success: true };
-    },
-    [],
-  );
+  const login = useCallback(() => {
+    iiLogin();
+  }, [iiLogin]);
 
   const logout = useCallback(() => {
-    removeUser();
+    iiClear();
     setUser(null);
-  }, []);
+  }, [iiClear]);
 
-  return { user, login, register, logout };
+  return { user, login, logout, isInitializing, isLoadingProfile };
 }

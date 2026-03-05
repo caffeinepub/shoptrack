@@ -36,7 +36,7 @@ import type { AppPage, Order } from "../lib/types";
 interface OrderDetailPageProps {
   order: Order;
   onNavigate: (page: AppPage, id?: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
 }
 
 function safeDate(dateStr: string): string {
@@ -114,10 +114,14 @@ export function OrderDetailPage({
 
   const sym = currencySymbols[order.currency] ?? `${order.currency} `;
 
-  const handleDelete = () => {
-    onDelete(order.id);
-    toast.success("Order deleted");
-    onNavigate("orders");
+  const handleDelete = async () => {
+    try {
+      await onDelete(order.id);
+      toast.success("Order deleted");
+      onNavigate("orders");
+    } catch {
+      toast.error("Failed to delete order. Please try again.");
+    }
   };
 
   return (

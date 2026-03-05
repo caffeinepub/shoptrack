@@ -28,8 +28,10 @@ import {
 interface OrderFormPageProps {
   orderId?: string;
   existingOrder?: Order;
-  onSave: (data: Omit<Order, "id" | "createdAt" | "updatedAt">) => void;
-  onUpdate: (data: Order) => void;
+  onSave: (
+    data: Omit<Order, "id" | "createdAt" | "updatedAt">,
+  ) => Promise<Order>;
+  onUpdate: (data: Order) => Promise<Order>;
   onNavigate: (page: AppPage, id?: string) => void;
 }
 
@@ -195,14 +197,16 @@ export function OrderFormPage({
       };
 
       if (isEdit && existingOrder) {
-        onUpdate({ ...existingOrder, ...data });
+        await onUpdate({ ...existingOrder, ...data });
         toast.success("Order updated successfully");
         onNavigate("orders-detail", existingOrder.id);
       } else {
-        const saved = onSave(data) as unknown as Order;
+        const saved = await onSave(data);
         toast.success("Order added successfully");
-        onNavigate("orders-detail", (saved as Order).id);
+        onNavigate("orders-detail", saved.id);
       }
+    } catch {
+      toast.error("Failed to save order. Please try again.");
     } finally {
       setSaving(false);
     }
