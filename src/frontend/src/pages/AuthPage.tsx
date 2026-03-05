@@ -1,6 +1,17 @@
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Package, Shield, ShoppingCart, TrendingUp } from "lucide-react";
-import { motion } from "motion/react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  Package,
+  Shield,
+  ShoppingCart,
+  TrendingUp,
+  UserCircle2,
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 import type { useAuth } from "../hooks/useAuth";
 
 interface AuthPageProps {
@@ -8,6 +19,8 @@ interface AuthPageProps {
 }
 
 export function AuthPage({ auth }: AuthPageProps) {
+  const [showHelp, setShowHelp] = useState(false);
+
   const features = [
     {
       icon: <ShoppingCart className="h-5 w-5" />,
@@ -17,11 +30,36 @@ export function AuthPage({ auth }: AuthPageProps) {
     { icon: <Shield className="h-5 w-5" />, label: "Private & secure" },
   ];
 
+  const steps = [
+    {
+      icon: <Shield className="h-4 w-4" />,
+      title: 'Click "Sign in" below',
+      desc: "A login window will open (allow popups if asked)",
+    },
+    {
+      icon: <UserCircle2 className="h-4 w-4" />,
+      title: "Create or select your anchor",
+      desc: "Use an existing Internet Identity anchor number, or create a new one for free",
+    },
+    {
+      icon: <CheckCircle2 className="h-4 w-4" />,
+      title: "Authenticate",
+      desc: "Use your device fingerprint, Face ID, PIN, or a security key",
+    },
+  ];
+
+  const handleLogin = () => {
+    // Make sure popups are not blocked by triggering on user gesture
+    auth.login();
+  };
+
+  const isError = !!(auth as any).isLoginError;
+  const loginError = (auth as any).loginError as Error | undefined;
+
   return (
     <div className="min-h-screen flex">
-      {/* Left panel - branding */}
+      {/* Left panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-primary flex-col items-center justify-center p-12">
-        {/* Background pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 left-10 h-40 w-40 rounded-full border-2 border-white" />
           <div className="absolute top-32 left-32 h-24 w-24 rounded-full border border-white" />
@@ -47,7 +85,6 @@ export function AuthPage({ auth }: AuthPageProps) {
           <p className="text-white/80 text-lg mb-10 max-w-xs mx-auto">
             The smart way to track all your online purchases in one place.
           </p>
-
           <div className="space-y-4">
             {features.map((f, i) => (
               <motion.div
@@ -67,13 +104,13 @@ export function AuthPage({ auth }: AuthPageProps) {
         </motion.div>
       </div>
 
-      {/* Right panel - auth */}
+      {/* Right panel */}
       <div className="flex-1 flex items-center justify-center p-6 bg-background">
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
-          className="w-full max-w-sm text-center"
+          className="w-full max-w-sm"
         >
           {/* Mobile logo */}
           <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
@@ -85,30 +122,75 @@ export function AuthPage({ auth }: AuthPageProps) {
             </span>
           </div>
 
-          <div className="flex justify-center mb-6 lg:flex">
+          <div className="flex justify-center mb-6">
             <div className="hidden lg:flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
               <Package className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
 
-          <h2 className="font-display text-2xl font-bold text-foreground mb-2">
+          <h2 className="font-display text-2xl font-bold text-foreground mb-2 text-center">
             Welcome to ShopTrack
           </h2>
-          <p className="text-muted-foreground text-sm mb-8 max-w-xs mx-auto">
-            Sign in securely to manage and track all your online purchases.
+          <p className="text-muted-foreground text-sm mb-6 text-center max-w-xs mx-auto">
+            Sign in with Internet Identity -- a free, secure, passwordless
+            login. No email or phone number required.
           </p>
 
+          {/* Error alert */}
+          <AnimatePresence>
+            {isError && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mb-4"
+              >
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {loginError?.message?.includes("closed")
+                      ? "The login window was closed. Please try again and complete the sign-in process."
+                      : loginError?.message?.includes("popup")
+                        ? "Popup was blocked by your browser. Please allow popups for this site and try again."
+                        : "Login failed. Please try again."}
+                  </AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* How it works steps */}
+          <div className="bg-muted/40 border border-border rounded-xl p-4 mb-5 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              How to sign in
+            </p>
+            {steps.map((step, i) => (
+              <div key={step.title} className="flex items-start gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold mt-0.5">
+                  {i + 1}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {step.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{step.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Login button */}
           <Button
             size="lg"
             className="w-full gap-2 text-base font-semibold"
-            onClick={auth.login}
+            onClick={handleLogin}
             disabled={auth.isInitializing}
             data-ocid="auth.login_button"
           >
             {auth.isInitializing ? (
               <>
                 <span className="h-4 w-4 rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground animate-spin" />
-                Initializing...
+                Signing in...
               </>
             ) : (
               <>
@@ -118,9 +200,70 @@ export function AuthPage({ auth }: AuthPageProps) {
             )}
           </Button>
 
-          <p className="mt-4 text-xs text-muted-foreground">
-            Secure, decentralized login — no passwords required
+          {/* Popup warning */}
+          <p className="mt-3 text-xs text-center text-amber-600 dark:text-amber-400 font-medium">
+            A popup window will open -- please allow popups if your browser
+            asks.
           </p>
+
+          {/* Help toggle */}
+          <button
+            type="button"
+            onClick={() => setShowHelp((v) => !v)}
+            className="mt-4 w-full text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+            data-ocid="auth.toggle"
+          >
+            {showHelp ? "Hide help" : "Popup not opening? Click here for help"}
+          </button>
+
+          <AnimatePresence>
+            {showHelp && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 rounded-xl border border-border bg-muted/30 p-4 space-y-2 text-xs text-muted-foreground">
+                  <p className="font-semibold text-foreground text-sm">
+                    If the login window does not open:
+                  </p>
+                  <ul className="space-y-1.5 list-disc list-inside">
+                    <li>
+                      Look for a <strong>popup blocked</strong> icon in your
+                      browser address bar and click it to allow popups
+                    </li>
+                    <li>
+                      In Chrome: Settings &rarr; Privacy &rarr; Site Settings
+                      &rarr; Pop-ups and redirects &rarr; Allow
+                    </li>
+                    <li>
+                      In Safari: Preferences &rarr; Websites &rarr; Pop-up
+                      Windows &rarr; Allow
+                    </li>
+                    <li>
+                      Try opening in a different browser (Chrome or Firefox
+                      recommended)
+                    </li>
+                    <li>
+                      Disable any ad-blocker or popup-blocking extension
+                      temporarily
+                    </li>
+                  </ul>
+                  <a
+                    href="https://identity.ic0.app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                    data-ocid="auth.link"
+                  >
+                    Open Internet Identity directly{" "}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </div>

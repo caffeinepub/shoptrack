@@ -129,35 +129,31 @@ function clearParamFromHash(paramName: string): void {
   // Split route path from query string
   const queryStartIndex = hashContent.indexOf("?");
 
-  let newHash: string;
-
   if (queryStartIndex === -1) {
-    // The entire hash may be key=value with no route prefix (e.g. #caffeineAdminToken=xxx)
-    // Try treating the whole thing as a query string
-    const params = new URLSearchParams(hashContent);
-    params.delete(paramName);
-    const remaining = params.toString();
-    // If nothing left (or only the token was there), reset to default route
-    newHash = remaining ? remaining : "/";
-  } else {
-    const routePath = hashContent.substring(0, queryStartIndex);
-    const queryString = hashContent.substring(queryStartIndex + 1);
-
-    // Parse and remove the specific parameter
-    const params = new URLSearchParams(queryString);
-    params.delete(paramName);
-
-    // Reconstruct the URL
-    const newQueryString = params.toString();
-    // Fall back to "/" if routePath is empty to avoid blank hash
-    newHash = routePath || "/";
-
-    if (newQueryString) {
-      newHash += `?${newQueryString}`;
-    }
+    // No query string in hash, nothing to remove
+    return;
   }
 
-  const newUrl = `${window.location.pathname + window.location.search}#${newHash}`;
+  const routePath = hashContent.substring(0, queryStartIndex);
+  const queryString = hashContent.substring(queryStartIndex + 1);
+
+  // Parse and remove the specific parameter
+  const params = new URLSearchParams(queryString);
+  params.delete(paramName);
+
+  // Reconstruct the URL
+  const newQueryString = params.toString();
+  let newHash = routePath;
+
+  if (newQueryString) {
+    newHash += `?${newQueryString}`;
+  }
+
+  // If we still have content in the hash, keep it; otherwise remove the hash entirely
+  const newUrl =
+    window.location.pathname +
+    window.location.search +
+    (newHash ? `#${newHash}` : "");
   window.history.replaceState(null, "", newUrl);
 }
 

@@ -34,8 +34,10 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // Show spinner while initializing, logging in, or loading profile — covers all post-login white screen cases
-  if (auth.isInitializing || (!auth.user && auth.isLoadingProfile)) {
+  // Show spinner while initializing, logging in, or loading profile.
+  // Also guard the brief window where isInitializing just flipped false but
+  // the profile fetch hasn't resolved yet — prevents the white screen flash.
+  if (auth.isInitializing || auth.isLoadingProfile) {
     return (
       <ThemeProvider
         attribute="class"
