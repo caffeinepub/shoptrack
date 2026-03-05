@@ -11,6 +11,7 @@ import {
 import { format } from "date-fns";
 import {
   ArrowRight,
+  Ban,
   CheckCircle2,
   Clock,
   IndianRupee,
@@ -55,7 +56,27 @@ export function DashboardPage({
   user,
   onNavigate,
 }: DashboardPageProps) {
-  const totalSpent = orders.reduce((s, o) => s + o.finalAmount, 0);
+  const EXPENSE_STATUSES: Order["status"][] = [
+    "Ordered",
+    "Shipped",
+    "OutForDelivery",
+    "Received",
+    "Replaced",
+  ];
+  const EXCLUDED_STATUSES: Order["status"][] = [
+    "Cancelled",
+    "Returned",
+    "Refunded",
+  ];
+
+  const totalSpent = orders
+    .filter((o) => EXPENSE_STATUSES.includes(o.status))
+    .reduce((s, o) => s + o.finalAmount, 0);
+
+  const excludedAmount = orders
+    .filter((o) => EXCLUDED_STATUSES.includes(o.status))
+    .reduce((s, o) => s + o.finalAmount, 0);
+
   const received = orders.filter((o) => o.status === "Received").length;
   const cancelled = orders.filter((o) => o.status === "Cancelled").length;
   const replaced = orders.filter((o) => o.status === "Replaced").length;
@@ -82,13 +103,22 @@ export function DashboardPage({
       ocid: "dashboard.stat.total_orders_card",
     },
     {
-      title: "Total Spent",
+      title: "Total Expenses",
       value: `₹${totalSpent.toFixed(2)}`,
+      subtitle: "Ordered · Shipped · Delivered · Received · Replaced",
       icon: (
         <IndianRupee className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
       ),
       iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
       ocid: "dashboard.stat.total_spent_card",
+    },
+    {
+      title: "Cancelled / Returned / Refunded",
+      value: `₹${excludedAmount.toFixed(2)}`,
+      subtitle: "Not counted in expenses",
+      icon: <Ban className="h-5 w-5 text-red-500" />,
+      iconBg: "bg-red-100 dark:bg-red-900/30",
+      ocid: "dashboard.stat.excluded_amount_card",
     },
     {
       title: "Received",
@@ -150,18 +180,19 @@ export function DashboardPage({
       </motion.div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.title}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: i * 0.05 }}
-            className={i < 2 ? "col-span-1" : "col-span-1"}
+            className="col-span-1"
           >
             <StatCard
               title={stat.title}
               value={stat.value}
+              subtitle={"subtitle" in stat ? stat.subtitle : undefined}
               icon={stat.icon}
               iconBg={stat.iconBg}
               data-ocid={stat.ocid}

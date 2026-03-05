@@ -96,9 +96,20 @@ export function AnalyticsPage({ orders }: AnalyticsPageProps) {
       .sort((a, b) => b.count - a.count);
   }, [orders]);
 
-  // Summary stats
-  const totalSpent = orders.reduce((s, o) => s + o.finalAmount, 0);
-  const avgOrderValue = orders.length > 0 ? totalSpent / orders.length : 0;
+  // Summary stats -- only count active expense statuses
+  const EXPENSE_STATUSES = [
+    "Ordered",
+    "Shipped",
+    "OutForDelivery",
+    "Received",
+    "Replaced",
+  ];
+  const expenseOrders = orders.filter((o) =>
+    EXPENSE_STATUSES.includes(o.status),
+  );
+  const totalSpent = expenseOrders.reduce((s, o) => s + o.finalAmount, 0);
+  const avgOrderValue =
+    expenseOrders.length > 0 ? totalSpent / expenseOrders.length : 0;
   const topCategory = categoryData[0]?.name ?? "—";
   const topPlatform = useMemo(() => {
     const map: Record<string, number> = {};

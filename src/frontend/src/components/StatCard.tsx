@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 interface StatCardProps {
   title: string;
   value: string | number;
+  subtitle?: string;
   icon: ReactNode;
   iconBg: string;
   trend?: string;
@@ -16,6 +17,7 @@ interface StatCardProps {
 export function StatCard({
   title,
   value,
+  subtitle,
   icon,
   iconBg,
   trend,
@@ -42,6 +44,11 @@ export function StatCard({
           <p className="mt-1.5 text-2xl font-bold text-foreground font-display tracking-tight">
             {value}
           </p>
+          {subtitle && (
+            <p className="mt-1 text-xs text-muted-foreground/70 leading-tight">
+              {subtitle}
+            </p>
+          )}
           {trend && (
             <p
               className={cn(
