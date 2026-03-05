@@ -34,8 +34,8 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  // Show initializing spinner
-  if (auth.isInitializing) {
+  // Show spinner while initializing, logging in, or loading profile — covers all post-login white screen cases
+  if (auth.isInitializing || (!auth.user && auth.isLoadingProfile)) {
     return (
       <ThemeProvider
         attribute="class"
